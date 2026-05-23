@@ -104,13 +104,3 @@ class SudoDNDApp(App):
         races_tab = self.query_one("#races_tab", TabPane)
         markdown_viewer = MarkdownViewer(races_data)
         await races_tab.mount(markdown_viewer)
-
-
-def main():
-
-    app = SudoDNDApp()
-    app.run()
-
-
-if __name__ == "__main__":
-    main()
