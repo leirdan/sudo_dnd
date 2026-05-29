@@ -59,3 +59,35 @@ ErrorScreen {
 Button {
   width: 30%;
 }
+
+SpellDetailScreen {
+    align: center middle;
+}
+
+#spell_modal {
+    width: 80;
+    height: 28;
+    padding: 1 2;
+    border: round $accent;
+}
+
+#spell_title {
+    margin-bottom: 1;
+    text-style: bold;
+}
+
+#spell_metadata {
+    height: auto;
+    margin-bottom: 1;
+}
+
+#spell_metadata > Static {
+    margin-right: 3;
+}
+
+#spell_desc_container {
+    height: 1fr;
+    overflow-y: auto;
+    padding: 1;
+    margin-bottom: 1;
+}

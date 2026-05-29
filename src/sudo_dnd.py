@@ -1,20 +1,23 @@
 import asyncio
+from textual import on
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, HorizontalGroup
 from httpx import AsyncClient
+from textual.screen import ModalScreen
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import (
+    Button,
     DataTable,
     Footer,
     Header,
-    OptionList,
+    Label,
+    Select,
+    Static,
     TabbedContent,
     TabPane,
     MarkdownViewer,
 )
 
 from textual.widgets.option_list import Option
-
-from error_modal import ErrorScreen
 
 START_MARKDOWN = """
 # SUDO DND
@@ -99,10 +102,10 @@ async def fetch_races() -> str:
                 markdown += f"- Abilities bonuses: \n"
                 for ability_bonus in data["ability_bonuses"]:
                     markdown += f"  - {ability_bonus['ability_score']['name']} (+{ability_bonus['bonus']})\n"
-                # if data["traits"]:
-                #     markdown += await fetch_traits(
-                #         [item["url"] for item in data["traits"]]
-                #     )
+                if data["traits"]:
+                    markdown += await fetch_traits(
+                        [item["url"] for item in data["traits"]]
+                    )
     return markdown
 
 
@@ -116,7 +119,7 @@ async def fetch_class_levels(c) -> str:
         if response.status_code == 200:
             data = response.json()
             for element in data:
-                markdown += f"##### Level {element["level"]}\n"
+                markdown += f"Level {element["level"]} \n"
                 markdown += f"Proficience bonus: (+{element["prof_bonus"]})\n"
                 markdown += f"Features: "
                 for f in element["features"]:
@@ -155,20 +158,20 @@ async def fetch_classes() -> str:
                 markdown += f"# {data['name']}\n"
                 markdown += f"## General Stats\n"
                 markdown += f"- Hit Dice: d{data['hit_die']}\n"
-                # if data["class_levels"]:
-                #     markdown += f"### Levels\n"
-                #     markdown += await fetch_class_levels(data["class_levels"])
+                if data["class_levels"]:
+                    markdown += f"### Levels\n"
+                    markdown += await fetch_class_levels(data["class_levels"])
 
-                # if data["subclasses"]:
-                #     markdown += f"## Subclasses\n"
-                #     markdown += await fetch_subclasses(
-                #         [sub["url"] for sub in data["subclasses"]]
-                #     )
+                if data["subclasses"]:
+                    markdown += f"## Subclasses\n"
+                    markdown += await fetch_subclasses(
+                        [sub["url"] for sub in data["subclasses"]]
+                    )
 
     return markdown
 
 
-async def fetch_spells_by_class(c: str) -> list[(str, str)]:
+async def fetch_spells_by_class(c: str) -> list[(str, str, str)]:
     list: list[(str, str)] = []
     base_url = URL_PREFIX + "/api/2014/classes/" + c + "/spells"
     headers = {"Accept": "application/json"}
@@ -177,10 +180,85 @@ async def fetch_spells_by_class(c: str) -> list[(str, str)]:
         if response.status_code == 200:
             data = response.json()
             if data["count"] > 0:
-                list.extend([(s["name"], s["level"]) for s in data["results"]])
-                # list.append({data["results"]["name"]}, {data["results"]["level"]})
+                list.extend(
+                    [(s["name"], s["level"], s["index"]) for s in data["results"]]
+                )
 
     return list
+
+
+async def fetch_spell(spell: str) -> tuple[str, str, str, str, str, str]:
+    ret = []
+    base_url = URL_PREFIX + "/api/2014/spells/" + spell
+    headers = {"Accept": "application/json"}
+
+    async with AsyncClient(headers=headers) as client:
+        response = await client.get(base_url)
+        if response.status_code == 200:
+            data = response.json()
+            ret = (
+                data["name"],
+                "\n\n".join(data["desc"]),
+                data["range"],
+                data["school"]["name"],
+                data["duration"],
+                data["level"],
+            )
+
+    return ret
+
+
+class ErrorScreen(ModalScreen):
+    CSS_PATH = "styles.tcss"
+
+    def __init__(self, error_message: str):
+        super().__init__()
+        self.error_message = error_message
+
+    def compose(self):
+        yield Label("ERROR", id="error_dialog")
+        yield Label(self.error_message, id="error_message")
+        yield Button("OK", id="ok_btn", variant="error")
+
+    def on_button_pressed(self, event: Button.Pressed):
+        self.dismiss()
+
+
+class SpellDetailScreen(ModalScreen):
+    CSS_PATH = "styles.tcss"
+
+    def __init__(
+        self,
+        spell_name: str,
+        description: str,
+        level: str,
+        range: str,
+        school: str,
+        duration: str,
+    ):
+        super().__init__()
+        self.spell_name = spell_name
+        self.description = description
+        self.level = level
+        self.range = range
+        self.school = school
+        self.duration = duration
+
+    def compose(self) -> ComposeResult:
+        with VerticalScroll(id="spell_modal"):
+            yield Static(
+                f"{self.spell_name}",
+                id="spell_title",
+            )
+            yield Static(f"Level: {self.level}")
+            yield Static(f"School: {self.school}")
+            yield Static(f"Range: {self.range}")
+            yield Static(f"Duration: {self.duration}")
+            yield Static(self.description, id="spell_description")
+            yield Button("Close", id="close_modal")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss()
 
 
 class SudoDNDApp(App):
@@ -203,38 +281,53 @@ class SudoDNDApp(App):
             with TabPane("Classes", id="classes_tab"):
                 pass
             with TabPane("Grimoire", id="spells_tab"):
-                with Horizontal(id="spells_container"):
-                    yield OptionList(
-                        *(Option(c.capitalize(), id=c) for c in CLASSES),
-                        id="spell_class_list",
-                    )
-                    yield DataTable(id="spell_table")
+                yield Select(
+                    options=[(c.capitalize(), c) for c in CLASSES],
+                    prompt="Choose a class",
+                    id="spell_class_select",
+                )
+                yield DataTable(id="spell_table", cursor_type="row")
         yield Footer()
-
-    def action_toggle_dark(self) -> None:
-        self.theme = "ansi-dark" if self.theme == "ansi-light" else "ansi-light"
 
     def action_show_tab(self, target: str) -> None:
         self.get_child_by_type(TabbedContent).active = target
 
-    async def on_option_list_option_selected(
-        self, target: OptionList.OptionSelected
-    ) -> None:
-        value = target.option.id
-        list = await fetch_spells_by_class(value)
-        self.show_spells_result(list)
+    @on(Select.Changed, "#spell_class_select")
+    async def update_spell_table(self, event: Select.Changed) -> None:
+        target_class = event.value
+        table = self.query_one("#spell_table", DataTable)
+        table.clear(columns=True)
 
-    def show_spells_result(self, list: list[(str, str)]) -> None:
-        spells_table = self.query_one("#spell_table", DataTable)
-        spells_table.clear(columns=True)
+        table.add_columns("Name", "Level")
+        spells = await fetch_spells_by_class(target_class)
 
-        if len(list) == 0:
+        if len(spells) == 0:
             self.push_screen(ErrorScreen("This class has no spells available"))
             pass
 
-        spells_table.add_columns("Name", "Level")
-        for name, level in list:
-            spells_table.add_row(name, str(level))
+        for n, l, t in spells:
+            table.add_row(n, l, key=t)
+
+        self.screen.set_focus(None)
+
+    @on(DataTable.RowSelected, "#spell_table")
+    async def show_spell_details(self, event: DataTable.RowSelected) -> None:
+        # table = self.query_one("#spell_table", DataTable)
+        row_key = event.row_key.value
+
+        name, desc, spell_range, school, duration, level = await fetch_spell(row_key)
+
+        self.push_screen(
+            SpellDetailScreen(
+                name,
+                desc,
+                spell_range,
+                school,
+                duration,
+                level,
+            )
+        )
+        self.screen.set_focus(None)
 
     async def on_mount(self) -> None:
         self.theme = "ansi-dark"
