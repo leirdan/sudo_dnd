@@ -1,0 +1,61 @@
+# MarkdownViewer {
+#   background: black;
+#   color: red;
+# }
+
+VerticalScroll {
+  background: black;
+}
+
+Markdown {
+  color: yellow;
+}
+
+MarkdownH1, MarkdownH2 {
+  text-style: bold;
+}
+
+MarkdownH1, MarkdownH2, MarkdownH3, MarkdownH4, MarkdownH5 {
+  color: red;
+}
+
+MarkdownTableOfContents {
+  background: black;
+  color: red; 
+}
+
+#spells_container {
+    height: 1fr;
+    width: 50%;
+}
+
+#spell_class_list {
+  width: 30; 
+  margin: 1;
+}
+
+#spell_table {
+  width: 1fr;
+  margin: 1;
+}
+
+ErrorScreen {
+  align: center middle;
+}
+
+#error_dialog {
+  width: 60;
+  height: 15;
+  border: solid red;    
+  background: crimson;
+  padding: 1 2;
+}
+
+#error_message {
+  height: 3;
+  content-align: center middle;
+}
+
+Button {
+  width: 30%;
+}
